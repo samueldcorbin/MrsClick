@@ -10,7 +10,7 @@ That's what left-click is for! Or maybe Tab! But never right-click!
 
 _"I tried an addon to fix it, but then I had to double click or press another key just to loot or talk to NPCs!"_
 
-**Mrs Click is here to help!**
+Tired of missclicks? **Mrs Click is here to help!**
 
 Mrs Click is a simple, extremely lightweight addon that prevents accidentally targeting things with right clicks, without interfering with normal right-click interactions.
 

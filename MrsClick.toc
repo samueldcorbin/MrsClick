@@ -1,6 +1,6 @@
 ## Interface: 90002
 ## Author: samueldcorbin
 ## Title: MrsClick
-## Version: 1.0.0
+## Version: 1.0.1
 ## Notes: Tired of missclicks? It's time for Mrs Click.
 MrsClick.lua

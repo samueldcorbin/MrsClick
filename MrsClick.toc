@@ -1,6 +1,7 @@
 ## Interface: 90002
 ## Author: samueldcorbin
 ## Title: Mrs Click
-## Version: 1.0.1
-## Notes: Tired of missclicks? It's time for Mrs Click!
+## Version: 1.1.0
+## Notes: Prevents accidental target changes from right clicks.
+## SavedVariablesPerCharacter: MrsClickSavedVariablesPerCharacter
 MrsClick.lua

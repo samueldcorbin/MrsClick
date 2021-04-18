@@ -1,26 +1,15 @@
--- MouselookStop() prevents clicks on 3D models in the WorldFrame from setting the player's target (even if mouse look was never started)
-
 local mrsclick_frame = CreateFrame("Frame")
 mrsclick_frame.name = "Mrs Click"
 
 local saved_variables_per_character = {
-    -- At startup, before user config is loaded, ignore configurable behavior
+    -- At startup, before user config is loaded, use game's native behavior
     allow_autoattack = true,
     autoattack_only_outside_instances = false
 }
 
 local interactable = false
 
--- Have to check for interactables on mousedown because "mouseover" UnitId is nil during mouseup
-WorldFrame:HookScript("OnMouseDown", function (self, button)
-    if button == "RightButton" then
-        interactable = false
-        mrsclick_frame:RegisterEvent("CURSOR_UPDATE")
-        ResetCursor() -- Produces CURSOR_UPDATE event (actually produces two) iff cursor is non-default (interactable or attackable)
-        mrsclick_frame:UnregisterEvent("CURSOR_UPDATE") -- in case we didn't get a CURSOR_EVENT
-    end
-end)
-    
+-- MouselookStop() prevents clicks on 3D models in the WorldFrame from setting the player's target (even if mouse look was never started)
 WorldFrame:HookScript("OnMouseUp", function (self, button)
     if button == "RightButton" and not interactable then
         MouselookStop()
@@ -41,8 +30,9 @@ local function no_level_in_tooltip()
     return true
 end
 
-local function on_cursor_update(frame)
-    -- Unit had a non-default cursor (player can interact with it or autoattack it)
+local function on_cursor_update()
+    local frame = mrsclick_frame
+    -- Unit had a non-default cursor (player can interact with it in some way)
     interactable = (saved_variables_per_character.allow_autoattack and
                        (not saved_variables_per_character.autoattack_only_outside_instances or
                        select(2, IsInInstance()) == "none")) or
@@ -55,6 +45,21 @@ local function on_cursor_update(frame)
                    no_level_in_tooltip() -- this catches other misc interactables
 
     frame:UnregisterEvent("CURSOR_UPDATE") -- If cursor is non-default, we get two CURSOR_UPDATE events, but we only need to check one of them
+end
+
+-- Have to check for interactables on mousedown because "mouseover" UnitId is nil during mouseup
+WorldFrame:HookScript("OnMouseDown", function (self, button)
+    if button == "RightButton" then
+        interactable = false
+        mrsclick_frame:RegisterEvent("CURSOR_UPDATE")
+        ResetCursor() -- Produces CURSOR_UPDATE event (actually produces two) iff cursor is non-default (interactable or attackable)
+        mrsclick_frame:UnregisterEvent("CURSOR_UPDATE")
+    end
+end)
+
+-- Save config
+local function on_player_logout()
+    MrsClickSavedVariablesPerCharacter = saved_variables_per_character
 end
 
 local function enable_disable_nested_check_button(check_button, child_check_button)
@@ -133,28 +138,26 @@ do
 		return check_button
     end
 
-    -- Create check buttons
     mrsclick_frame.check_buttons = {
         allow_autoattack = create_check_button("Allow Auto Attack", "Allow right-click auto attacks against untargeted enemies (which will change your target).", mrsclick_frame),
         autoattack_only_outside_instances = create_check_button("Only Outside Instances", "Inside instances, block right-click auto attacks against untargeted enemies to prevent accidental target changes.", mrsclick_frame)
     }
 
-    -- Arrange check buttons
     local mrsclick_frame_check_buttons = mrsclick_frame.check_buttons
     local allow_autoattack_check_button = mrsclick_frame_check_buttons.allow_autoattack
-    allow_autoattack_check_button:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", -2, -8)
     local autoattack_only_outside_instances_check_button = mrsclick_frame_check_buttons.autoattack_only_outside_instances
+    allow_autoattack_check_button:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", -2, -8)
     autoattack_only_outside_instances_check_button:SetPoint("TOPLEFT", allow_autoattack_check_button, "BOTTOMLEFT", 16, -8)
 
     -- "Only outside instances" option is disabled if "allow autoattack" is false
     allow_autoattack_check_button.enable_disable_child = autoattack_only_outside_instances_check_button
 end
 
-local event_handlers = {
-    CURSOR_UPDATE = on_cursor_update
-}
+local function on_addon_loaded(frame, addon)
+    local frame = mrsclick_frame
 
-local function on_addon_loaded(frame)
+    frame:UnregisterEvent("ADDON_LOADED")
+
     -- Default options
     local default_saved_variables_per_character = {
         allow_autoattack = false, -- allow right click to auto-attack new targets
@@ -163,13 +166,12 @@ local function on_addon_loaded(frame)
 
     -- Load config
     do
-        local mrs_click_saved_variables_per_character = MrsClickSavedVariablesPerCharacter
-        if mrs_click_saved_variables_per_character then
+        if MrsClickSavedVariablesPerCharacter then
             for name, default in pairs(default_saved_variables_per_character) do
-                local saved = mrs_click_saved_variables_per_character[name]
+                local saved = MrsClickSavedVariablesPerCharacter[name]
                 if saved == nil then
                     -- Adds the default value for a new option when user updates
-                    saved_variables_per_character = default
+                    saved_variables_per_character[name] = default
                 else
                     saved_variables_per_character[name] = saved
                 end
@@ -178,14 +180,23 @@ local function on_addon_loaded(frame)
             for name, default in pairs(default_saved_variables_per_character) do
                 saved_variables_per_character[name] = default
             end
+            tester = saved_variables_per_character
         end
     end
 
-    -- Save config
-    event_handlers["PLAYER_LOGOUT"] = function ()
-        MrsClickSavedVariablesPerCharacter = saved_variables_per_character
+    -- Set up event handlers
+    do
+        local event_handlers = {
+            CURSOR_UPDATE = on_cursor_update,
+            PLAYER_LOGOUT = on_player_logout
+        }
+        for event in pairs(event_handlers) do
+            frame:RegisterEvent(event)
+        end
+        frame:SetScript("OnEvent", function(self, event, ...)
+            event_handlers[event](...)
+        end)
     end
-    frame:RegisterEvent("PLAYER_LOGOUT")
 
     -- Options pane
     function frame:okay()
@@ -212,16 +223,9 @@ local function on_addon_loaded(frame)
     InterfaceOptions_AddCategory(mrsclick_frame)
 end
 
-event_handlers["ADDON_LOADED"] = function (frame, addon)
-    if addon == "MrsClick" then
-        frame:UnregisterEvent("ADDON_LOADED")
-        on_addon_loaded(frame)
-        event_handlers.addon_loaded = nil
-    end
-end
-
-mrsclick_frame:SetScript("OnEvent", function(frame, event, addon)
-    event_handlers[event](frame, addon)
-end)
-
 mrsclick_frame:RegisterEvent("ADDON_LOADED")
+mrsclick_frame:SetScript("OnEvent", function(self, event, addon)
+    if event == "ADDON_LOADED" and addon == "MrsClick" then
+        on_addon_loaded()
+    end
+end)
